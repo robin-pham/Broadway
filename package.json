@@ -1,13 +1,13 @@
 {
-  "name": "broadwayjs",
+  "name": "@robin-pham/broadwayjs",
   "version": "0.0.2",
   "main": "./index.js",
-  "license": "BSD",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "https://github.com/defunctzombie/Broadway"
+    "url": "git+https://github.com/defunctzombie/Broadway.git"
   },
-  "description": "A JavaScript H.264 decoder",
+  "description": "A JavaScript H.264 decoder forked from https://github.com/defunctzombie/Broadway",
   "keywords": [
     "h264",
     "decoder",
@@ -18,5 +18,13 @@
     "Player/Player.js",
     "Player/Decoder.js",
     "Player/YUVCanvas.js"
-  ]
+  ],
+  "bugs": {
+    "url": "https://github.com/defunctzombie/Broadway/issues"
+  },
+  "homepage": "https://github.com/defunctzombie/Broadway#readme",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": ""
 }
