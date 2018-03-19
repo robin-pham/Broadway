@@ -1,0 +1,22 @@
+{
+  "name": "broadwayjs",
+  "version": "0.0.2",
+  "main": "./index.js",
+  "license": "BSD",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/defunctzombie/Broadway"
+  },
+  "description": "A JavaScript H.264 decoder",
+  "keywords": [
+    "h264",
+    "decoder",
+    "video"
+  ],
+  "files": [
+    "index.js",
+    "Player/Player.js",
+    "Player/Decoder.js",
+    "Player/YUVCanvas.js"
+  ]
+}

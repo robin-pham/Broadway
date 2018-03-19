@@ -23,50 +23,39 @@ p.decode(<binary>);
 
 
 // universal module definition
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        // AMD. Register as an anonymous module.
-        define(["./Decoder", "./YUVCanvas"], factory);
-    } else if (typeof exports === 'object') {
-        // Node. Does not work with strict CommonJS, but
-        // only CommonJS-like environments that support module.exports,
-        // like Node.
-        module.exports = factory(require("./Decoder"), require("./YUVCanvas"));
-    } else {
-        // Browser globals (root is window)
-        root.Player = factory(root.Decoder, root.YUVCanvas);
-    }
-}(this, function (Decoder, WebGLCanvas) {
-  "use strict";
-  
-  
-  var nowValue = Decoder.nowValue;
-  
-  
+"use strict";
+
+module.exports = (function() {
+  var WebGLCanvas = require('./YUVCanvas');
+
+  var nowValue = function(){
+    return (new Date()).getTime();
+  };
+
   var Player = function(parOptions){
     var self = this;
     this._config = parOptions || {};
-    
+
     this.render = true;
     if (this._config.render === false){
       this.render = false;
     };
-    
-    this.nowValue = nowValue;
-    
+
+    this.Decoder = parOptions.Decoder;
+
     this._config.workerFile = this._config.workerFile || "Decoder.js";
     if (this._config.preserveDrawingBuffer){
       this._config.contextOptions = this._config.contextOptions || {};
       this._config.contextOptions.preserveDrawingBuffer = true;
     };
-    
+
     var webgl = "auto";
     if (this._config.webgl === true){
       webgl = true;
     }else if (this._config.webgl === false){
       webgl = false;
     };
-    
+
     if (webgl == "auto"){
       webgl = true;
       try{
@@ -85,9 +74,9 @@ p.decode(<binary>);
         webgl = false;
       };
     };
-    
+
     this.webgl = webgl;
-    
+
     // choose functions
     if (this.webgl){
       this.createCanvasObj = this.createCanvasWebGL;
@@ -96,26 +85,26 @@ p.decode(<binary>);
       this.createCanvasObj = this.createCanvasRGB;
       this.renderFrame = this.renderFrameRGB;
     };
-    
-    
+
+
     var lastWidth;
     var lastHeight;
     var onPictureDecoded = function(buffer, width, height, infos) {
       self.onPictureDecoded(buffer, width, height, infos);
-      
+
       var startTime = nowValue();
-      
+
       if (!buffer || !self.render) {
         return;
       };
-      
+
       self.renderFrame({
         canvasObj: self.canvasObj,
         data: buffer,
         width: width,
         height: height
       });
-      
+
       if (self.onRenderFrameComplete){
         self.onRenderFrameComplete({
           data: buffer,
@@ -125,68 +114,73 @@ p.decode(<binary>);
           canvasObj: self.canvasObj
         });
       };
-      
+
     };
-    
+
     // provide size
-    
+
     if (!this._config.size){
       this._config.size = {};
     };
     this._config.size.width = this._config.size.width || 200;
     this._config.size.height = this._config.size.height || 200;
-    
+
     if (this._config.useWorker){
-      var worker = new Worker(this._config.workerFile);
-      this.worker = worker;
-      worker.addEventListener('message', function(e) {
+      self.worker = new Worker(this._config.workerFile);
+      self.worker.addEventListener('message', function(e) {
         var data = e.data;
         if (data.consoleLog){
           console.log(data.consoleLog);
           return;
         };
-        
+
         onPictureDecoded.call(self, new Uint8Array(data.buf, 0, data.length), data.width, data.height, data.infos);
-        
+
       }, false);
-      
-      worker.postMessage({type: "Broadway.js - Worker init", options: {
+
+      self.worker.onerror = function(e){
+        if(self._config.onError) {
+          self._config.onError(e);
+        }
+      };
+
+      self.worker.postMessage({type: "Broadway.js - Worker init", options: {
         rgb: !webgl,
         memsize: this.memsize,
-        reuseMemory: this._config.reuseMemory ? true : false
+        reuseMemory: this._config.reuseMemory
       }});
-      
+
       if (this._config.transferMemory){
         this.decode = function(parData, parInfo){
           // no copy
           // instead we are transfering the ownership of the buffer
           // dangerous!!!
-          
-          worker.postMessage({buf: parData.buffer, offset: parData.byteOffset, length: parData.length, info: parInfo}, [parData.buffer]); // Send data to our worker.
+
+          self.worker.postMessage({buf: parData.buffer, offset: parData.byteOffset, length: parData.length, info: parInfo}, [parData.buffer]); // Send data to our worker.
         };
-        
+
       }else{
         this.decode = function(parData, parInfo){
           // Copy the sample so that we only do a structured clone of the
           // region of interest
           var copyU8 = new Uint8Array(parData.length);
           copyU8.set( parData, 0, parData.length );
-          worker.postMessage({buf: copyU8.buffer, offset: 0, length: parData.length, info: parInfo}, [copyU8.buffer]); // Send data to our worker.
+          self.worker.postMessage({buf: copyU8.buffer, offset: 0, length: parData.length, info: parInfo}, [copyU8.buffer]); // Send data to our worker.
         };
-        
+
       };
-      
+
       if (this._config.reuseMemory){
         this.recycleMemory = function(parArray){
           //this.beforeRecycle();
-          worker.postMessage({reuse: parArray.buffer}, [parArray.buffer]); // Send data to our worker.
+          self.worker.postMessage({reuse: parArray.buffer}, [parArray.buffer]); // Send data to our worker.
           //this.afterRecycle();
         };
       }
-      
+
     }else{
-      
-      this.decoder = new Decoder({
+
+      this.decoder = new this.Decoder({
         rgb: !webgl
       });
       this.decoder.onPictureDecoded = onPictureDecoded;
@@ -194,35 +188,32 @@ p.decode(<binary>);
       this.decode = function(parData, parInfo){
         self.decoder.decode(parData, parInfo);
       };
-      
-    };
-    
-    
-    
+    }
+
     if (this.render){
       this.canvasObj = this.createCanvasObj({
         contextOptions: this._config.contextOptions
       });
-      this.canvas = this.canvasObj.canvas;
-    };
+    }
 
-    this.domNode = this.canvas;
-    
-    lastWidth = this._config.size.width;
-    lastHeight = this._config.size.height;
-    
+    this.close = function() {
+      if(self.worker) {
+        self.worker.terminate();
+      }
+    }
+
   };
-  
+
   Player.prototype = {
-    
+
     onPictureDecoded: function(buffer, width, height, infos){},
-    
+
     // call when memory of decoded frames is not used anymore
     recycleMemory: function(buf){
     },
     /*beforeRecycle: function(){},
     afterRecycle: function(){},*/
-    
+
     // for both functions options is:
     //
     //  width
@@ -235,16 +226,16 @@ p.decode(<binary>);
       canvasObj.contextOptions = options.contextOptions;
       return canvasObj;
     },
-    
+
     createCanvasRGB: function(options){
       var canvasObj = this._createBasicCanvasObj(options);
       return canvasObj;
     },
-    
+
     // part that is the same for webGL and RGB
     _createBasicCanvasObj: function(options){
       options = options || {};
-      
+
       var obj = {};
       var width = options.width;
       if (!width){
@@ -258,22 +249,22 @@ p.decode(<binary>);
       obj.canvas.width = width;
       obj.canvas.height = height;
       obj.canvas.style.backgroundColor = "#0D0E1B";
-      
-      
+
+
       return obj;
     },
-    
+
     // options:
     //
     // canvas
     // data
     renderFrameWebGL: function(options){
-      
+
       var canvasObj = options.canvasObj;
-      
+
       var width = options.width || canvasObj.canvas.width;
       var height = options.height || canvasObj.canvas.height;
-      
+
       if (canvasObj.canvas.width !== width || canvasObj.canvas.height !== height || !canvasObj.webGLCanvas){
         canvasObj.canvas.width = width;
         canvasObj.canvas.height = height;
@@ -284,31 +275,31 @@ p.decode(<binary>);
           height: height
         });
       };
-      
+
       var ylen = width * height;
       var uvlen = (width / 2) * (height / 2);
-      
+
       canvasObj.webGLCanvas.drawNextOutputPicture({
         yData: options.data.subarray(0, ylen),
         uData: options.data.subarray(ylen, ylen + uvlen),
         vData: options.data.subarray(ylen + uvlen, ylen + uvlen + uvlen)
       });
-      
+
       var self = this;
       self.recycleMemory(options.data);
-      
+
     },
     renderFrameRGB: function(options){
       var canvasObj = options.canvasObj;
 
       var width = options.width || canvasObj.canvas.width;
       var height = options.height || canvasObj.canvas.height;
-      
+
       if (canvasObj.canvas.width !== width || canvasObj.canvas.height !== height){
         canvasObj.canvas.width = width;
         canvasObj.canvas.height = height;
       };
-      
+
       var ctx = canvasObj.ctx;
       var imgData = canvasObj.imgData;
 
@@ -324,12 +315,11 @@ p.decode(<binary>);
       ctx.putImageData(imgData, 0, 0);
       var self = this;
       self.recycleMemory(options.data);
-      
-    }
-    
-  };
-  
-  return Player;
-  
-}));
 
+    }
+
+  };
+
+  return Player;
+
+})();
